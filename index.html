@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>EcoVision – 도시 공기질 모니터링</title>
+
+<!-- Leaflet 지도 CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+/* ------------------------------------------------ */
+/* 기본 설정 */
+/* ------------------------------------------------ */
+* {
+  margin: 0; padding: 0;
+  box-sizing: border-box;
+  font-family: 'Noto Sans KR', sans-serif;
+}
+body {
+  background: #f0f4ff;
+  color: #1d2a3b;
+  overflow-x: hidden;
+}
+
+/* ------------------------------------------------ */
+/* NAVIGATION */
+/* ------------------------------------------------ */
+nav {
+  width: 100%;
+  padding: 18px 50px;
+  display: flex; justify-content: space-between; align-items: center;
+  background: #0f3c77;
+  color: white;
+  position: fixed;
+  top: 0; left: 0;
+  z-index: 1000;
+}
+nav h1 {
+  font-size: 26px;
+  font-weight: 700;
+}
+nav ul {
+  display: flex;
+  gap: 25px;
+}
+nav ul li { list-style: none; }
+nav ul li a {
+  color: #bbd7ff;
+  text-decoration: none;
+  font-size: 16px;
+}
+
+/* ------------------------------------------------ */
+/* HERO – 실시간 PM2.5 표시 */
+/* ------------------------------------------------ */
+.hero {
+  padding-top: 120px;
+  text-align: center;
+  padding-bottom: 60px;
+}
+.hero-title {
+  font-size: 42px;
+  font-weight: 800;
+  margin-bottom: 10px;
+}
+.hero-sub {
+  font-size: 20px;
+  color: #3b4d63;
+  margin-bottom: 20px;
+}
+
+/* 공기질 박스 */
+.air-box {
+  display: inline-block;
+  padding: 25px 40px;
+  border-radius: 16px;
+  background: white;
+  box-shadow: 0px 4px 12px rgba(0,0,0,0.1);
+  margin-top: 20px;
+  transition: 0.4s;
+}
+.air-box-value {
+  font-size: 60px;
+  font-weight: 800;
+}
+.air-box-grade {
+  margin-top: 8px;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+/* ------------------------------------------------ */
+/* SECTION 제목 */
+/* ------------------------------------------------ */
+.section-title {
+  font-size: 32px;
+  margin-bottom: 20px;
+}
+
+/* ------------------------------------------------ */
+/* 지도 영역 */
+/* ------------------------------------------------ */
+#map {
+  width: 100%;
+  height: 380px;
+  border-radius: 16px;
+  margin-top: 15px;
+  box-shadow: 0px 4px 12px rgba(0,0,0,0.1);
+}
+
+/* ------------------------------------------------ */
+/* 그래프 영역 */
+/* ------------------------------------------------ */
+.graph-container {
+  width: 100%;
+  background: white;
+  border-radius: 16px;
+  padding: 20px;
+  margin-top: 20px;
+  box-shadow: 0px 4px 12px rgba(0,0,0,0.1);
+}
+
+/* ------------------------------------------------ */
+/* 행동 가이드 */
+/* ------------------------------------------------ */
+.guide-box {
+  background: white;
+  padding: 25px;
+  border-radius: 16px;
+  box-shadow: 0px 4px 12px rgba(0,0,0,0.1);
+  margin-top: 25px;
+}
+.guide-item {
+  margin-bottom: 15px;
+  padding: 12px 15px;
+  border-left: 6px solid #1d2a3b;
+  background: #f5f8ff;
+  border-radius: 8px;
+  font-size: 17px;
+}
+
+/* ------------------------------------------------ */
+/* 버튼 */
+/* ------------------------------------------------ */
+button {
+  padding: 12px 22px;
+  background: #0f3c77;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-top: 20px;
+  font-size: 16px;
+}
+button:hover {
+  background: #0a2d5a;
+}
+
+/* ------------------------------------------------ */
+/* 전체 레이아웃 */
+/* ------------------------------------------------ */
+section {
+  padding: 40px 70px;
+}
+</style>
+</head>
+<body>
+
+<!-- 네비게이션 -->
+<nav>
+  <h1>EcoVision</h1>
+  <ul>
+    <li><a href="#map-section">공기질 지도</a></li>
+    <li><a href="#graph-section">미세먼지 그래프</a></li>
+    <li><a href="#guide-section">행동 가이드</a></li>
+  </ul>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <h2 class="hero-title">도시 공기질을 한눈에 — EcoVision</h2>
+  <p class="hero-sub">오늘의 도시 공기, 눈으로 확인하세요. 실시간 데이터를 기반으로 분석합니다.</p>
+
+  <div class="air-box" id="airBox">
+    <div class="air-box-value" id="pmValue">32</div>
+    <div class="air-box-grade" id="pmGrade">좋음</div>
+  </div>
+
+  <button onclick="refreshData()">데이터 새로고침</button>
+</section>
+
+<!-- 지도 Section -->
+<section id="map-section">
+  <h3 class="section-title">실시간 공기질 지도</h3>
+  <p>센서를 클릭하면 해당 지역의 실시간 PM2.5 정보가 나타납니다.</p>
+
+  <div id="map"></div>
+</section>
+
+<!-- 그래프 Section -->
+<section id="graph-section">
+  <h3 class="section-title">24시간 미세먼지 변화 그래프</h3>
+  <div class="graph-container">
+    <canvas id="pmChart"></canvas>
+  </div>
+</section>
+
+<!-- 행동 가이드 Section -->
+<section id="guide-section">
+  <h3 class="section-title">미세먼지 행동 가이드</h3>
+
+  <div class="guide-box">
+    <div class="guide-item">좋음 😊 : 실외 활동에 적합합니다.</div>
+    <div class="guide-item">보통 🙂 : 평소처럼 활동 가능하지만 민감군은 주의.</div>
+    <div class="guide-item">나쁨 ⚠ : 외출 시 마스크 착용을 권장합니다.</div>
+    <div class="guide-item">매우 나쁨 🚨 : 외출을 최소화하고, 실내 환기를 자제하세요.</div>
+  </div>
+</section>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<script>
+/* ------------------------------------------------------------- */
+/* 실시간 PM2.5 박스 색상 업데이트 */
+/* ------------------------------------------------------------- */
+function updatePMBox(value) {
+  const box = document.getElementById('airBox');
+  const grade = document.getElementById('pmGrade');
+
+  document.getElementById('pmValue').textContent = value;
+
+  if (value <= 30) {
+    box.style.background = "#b8e8ff";
+    grade.textContent = "좋음";
+  } else if (value <= 80) {
+    box.style.background = "#ffe8b8";
+    grade.textContent = "보통";
+  } else if (value <= 150) {
+    box.style.background = "#ffd1b8";
+    grade.textContent = "나쁨";
+  } else {
+    box.style.background = "#ffb8b8";
+    grade.textContent = "매우 나쁨";
+  }
+}
+
+/* 데이터 새로고침 (랜덤 시뮬레이션) */
+function refreshData() {
+  const newPM = Math.floor(Math.random() * 180);
+  updatePMBox(newPM);
+}
+
+/* ------------------------------------------------------------- */
+/* 지도 설정 */
+/* ------------------------------------------------------------- */
+var map = L.map('map').setView([37.5665, 126.9780], 11);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+}).addTo(map);
+
+/* 지도 센서 데이터 */
+const sensors = [
+  { name: "종로구 센서", lat: 37.573, lng: 126.979, pm: 45 },
+  { name: "강남구 센서", lat: 37.497, lng: 127.027, pm: 88 },
+  { name: "마포구 센서", lat: 37.563, lng: 126.908, pm: 120 },
+];
+
+sensors.forEach(s => {
+  L.marker([s.lat, s.lng]).addTo(map)
+    .bindPopup(`${s.name}<br>PM2.5 : ${s.pm}`);
+});
+
+/* ------------------------------------------------------------- */
+/* Chart.js 그래프 */
+/* ------------------------------------------------------------- */
+const ctx = document.getElementById('pmChart').getContext('2d');
+
+new Chart(ctx, {
+  type: 'line',
+  data: {
+    labels: [...Array(24).keys()],
+    datasets: [{
+      label: "PM2.5 농도",
+      data: Array.from({length: 24}, () => Math.floor(Math.random() * 150)),
+      borderColor: "#0f3c77",
+      backgroundColor: "#aaccff",
+      tension: 0.3
+    }]
+  },
+  options: {
+    responsive: true,
+    scales: {
+      y: { beginAtZero: true }
+    }
+  }
+});
+</script>
+
+</body>
+</html>
